@@ -24,7 +24,7 @@ BOOL SetPriv(HANDLE token, char *privilege) {
 
 	AdjustTokenPrivileges(token, FALSE, &tp, sizeof(TOKEN_PRIVILEGES), NULL, NULL);
 	if ((err = GetLastError()) != ERROR_SUCCESS) {
-		printf("AdjustTokenPrivileges error: %u\n", err); //Get error here (ie invalid handle)
+		//printf("AdjustTokenPrivileges error: %u\n", err); //Get error here (ie invalid handle)
 		return FALSE;
 	}
 	else {
@@ -33,7 +33,7 @@ BOOL SetPriv(HANDLE token, char *privilege) {
 	return TRUE;
 }
 
-DWORD GetModuleBaseAddress(LPCSTR szProcessName, LPCSTR szModuleName) {
+BYTE* GetModuleBaseAddress(LPCSTR szProcessName, LPCSTR szModuleName) {
 	HANDLE hSnap;
 	HANDLE procSnap;
 	PROCESSENTRY32 pe32;
@@ -59,8 +59,8 @@ DWORD GetModuleBaseAddress(LPCSTR szProcessName, LPCSTR szModuleName) {
 			hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE | TH32CS_SNAPMODULE32, PID); //
 
 			if (hSnap == INVALID_HANDLE_VALUE) {
-				printf("Invalid handle value for PID: %d\n", PID);
-				printf("Error: %u\n", GetLastError());
+				printf("Received invalid handle value for PID: %d\n", PID);
+				printf("Error: %u (try running with admin privileges)\n", GetLastError());
 				return 0;
 			}
 			xModule.dwSize = sizeof(MODULEENTRY32);
@@ -73,7 +73,7 @@ DWORD GetModuleBaseAddress(LPCSTR szProcessName, LPCSTR szModuleName) {
 			do {
 				if (_strcmpi(xModule.szModule, szModuleName) == 0) {
 					CloseHandle(hSnap);
-					return (DWORD)xModule.modBaseAddr;
+					return xModule.modBaseAddr;
 				}
 			} while (Module32Next(hSnap, &xModule));
 			CloseHandle(hSnap);
@@ -87,12 +87,12 @@ DWORD GetModuleBaseAddress(LPCSTR szProcessName, LPCSTR szModuleName) {
 }
 
 int main(int argc, char **argv) {
-	int addr;
+	BYTE* addr;
 	HANDLE self = NULL;
 
 	if (argc < 2) {
-		printf("Usage: ./%s <executable> <module>\n", argv[0]);
-		printf("<module> is optional. If not specified will find baseaddr of the executable\n");
+		printf("[ === %s === ]\nUsage:\n  ./%s <executable> <module (optional)>\n", argv[0], argv[0]);
+		printf("example:\n  ./%s main.exe kernel32.dll\n", argv[0]);
 		return 0;
 	}
 
@@ -103,6 +103,9 @@ int main(int argc, char **argv) {
 	SetPriv(self, (char *)SE_DEBUG_NAME); //SeDebugPriv needed if trying to access a system process
 
 	addr = GetModuleBaseAddress(argv[1], argv[argc - 1]); //If only 1 argument, argv[1]. If 2 arguments, argv[2]
-	printf("%x (%d)\n", addr, addr);
-	return addr;
+	
+	if (addr) {
+		printf("%s\n  [Base Address]: 0x%llx  (%lld)\n", argv[argc-1], addr, addr);
+	}
+	return !addr;
 }
